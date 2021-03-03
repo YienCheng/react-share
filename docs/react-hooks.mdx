@@ -1,0 +1,211 @@
+---
+id: react-hooks
+title: React函数组件与Hooks
+---
+
+## 什么是函数式组件？
+
+- 本质是一个返回 React 元素的 Javascript 函数
+- 接收唯一带有数据的 “props”（代表属性）对象，没有属于自己的内部 State
+- 内部没有生命周期的钩子函数
+- 采用函数式编程的思想，具备函数的所有属性
+
+## 一个简单的 Hello Word 函数式组件案例
+
+```jsx live
+function HelloWord(props) {
+  return <h1>Hello Word</h1>;
+}
+```
+
+## 函数式组件与类组件的对比
+
+- 类组件需要继承 class，函数组件不需要；
+- 类组件可以访问生命周期方法，函数组件不能；
+- 类组件中可以获取到实例化后的 this，并基于这个 this 做各种各样的事情，而函数组件不可以；
+- 类组件中可以定义并维护 state（状态），而函数组件不可以；
+- ......
+
+## React 类组件所带来的问题
+
+### this 指向问题
+
+```jsx {9-14,20}
+class Count extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      count: 0,
+    };
+  }
+
+  changeCountHandle() {
+    // this: undefined
+    this.setState({
+      count: this.state.count + 1,
+    });
+  }
+
+  render() {
+    return (
+      <div>
+        <p>You Click {this.state.count} Count!</p>
+        <button onClick={this.changeCountHandle}>点击</button>
+      </div>
+    );
+  }
+}
+```
+
+```jsx {3}
+class FollowButton extends React.Component {
+  showMessage = () => {
+    alert(`关注${this.props.user.name}成功！`);
+  };
+
+  onClickHandle = () => {
+    setTimeout(() => {
+      this.showMessage();
+    }, 3000);
+  };
+
+  render() {
+    return <button onClick={this.onClickHandle}>关注</button>;
+  }
+}
+```
+
+### 逻辑横切与复用问题
+
+如果我们要在一个组件里实现一个 Clock 和 Change Text 的功能，在类组件中需要怎么实现呢？
+
+```jsx live
+class Demo extends React.Component {
+  constructor(props) {
+    super(props);
+    // Clock 和 Change Text 的state
+    this.state = { date: new Date(), text: "World" };
+  }
+
+  // 设置 Clock 定时器
+  componentDidMount() {
+    this.timerID = setInterval(() => this.tick(), 1000);
+  }
+
+  // 清除 Clock 定时器
+  componentWillUnmount() {
+    clearInterval(this.timerID);
+  }
+
+  // 设置 Clock state
+  tick() {
+    this.setState({
+      date: new Date(),
+    });
+  }
+
+  // Change Text state
+  changeText() {
+    this.setState({
+      text: this.state.text === "Word" ? "React" : "Word",
+    });
+  }
+
+  render() {
+    return (
+      <div>
+        <button onClick={this.changeText.bind(this)}>改变文字</button>
+        <h1>{`Hello, ${this.state.text}!`}</h1>
+        <h2>It is {this.state.date.toLocaleTimeString()}.</h2>
+      </div>
+    );
+  }
+}
+```
+
+从以上代码可以看出来当 Change 功能和 Clock 功能在一个组件中时，他们各自的逻辑都需要写在同一个组件中，试想以下当一个组件中有 N 多功能时这个组件会是多么的庞大，以后维护起来需要改一个功能的话可能涉及到多个地方（方法、生命周期、render）等，对于以后的维护可能会很困难。
+
+如果我们能把各自功能的实现都封装在一起通过组合的方式来使用，这样的代码组织不是更有利于以后的维护吗？所以，通过 React Hooks 写法我们可以做到。
+
+## React Hooks 的写法
+
+具体用法可查阅[官网说明](https://react.docschina.org/docs/hooks-intro.html)
+
+```jsx {6,9} title="/src/app.js"
+import useChangeText from "./hooks/useChangeText";
+import useClock from "./hooks/useClock";
+
+function App() {
+  // Change Text
+  const { text, changeText } = useChangeText();
+
+  // Clock
+  const date = useClock(new Date());
+
+  return (
+    <div style={{ padding: "10px" }}>
+      <button onClick={changeText}>改变文字</button>
+      <h1>{`Hello, ${text}!`}</h1>
+      <h2>It is {date.toLocaleTimeString()}.</h2>
+    </div>
+  );
+}
+```
+
+```jsx {4,16} title="/src/hooks/useChangeText.js"
+import { useState } from "react";
+
+function useChangeText() {
+  const [text, setText] = useState("Word");
+
+  /**
+   * const state = useState("Word");
+   * const text = state[0];
+   * const setText = state[1];
+   */
+
+  function changeText() {
+    text === "Word" ? setText("React") : setText("Word");
+  }
+
+  return { text, changeText };
+}
+```
+
+```jsx {4,10-16} title="/src/hooks/useClock.js"
+import { useState, useEffect } from "react";
+
+function useClock(initState) {
+  const [date, setDate] = useState(initState);
+
+  const tick = () => {
+    setDate(new Date());
+  };
+
+  useEffect(() => {
+    const timerID = setInterval(tick, 1000);
+
+    return () => {
+      clearInterval(timerID);
+    };
+  }, []);
+
+  /**
+   * useEffect(() => {})
+   * 在组件挂载和更新时调用
+   *
+   * useEffect(() => {}, [])
+   * 仅在组件挂载时调用
+   *
+   * useEffect(() => {}, [state1， state2])
+   * 会对state1 和 state2 进行比较，如果发生变更时调用
+   *
+   * useEffect(() => {
+   *   return () => {}
+   * })
+   * 返回的函数为清除函数，每当组件卸载时都会调用
+   */
+
+  return date;
+}
+```
